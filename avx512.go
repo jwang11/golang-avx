@@ -7,9 +7,29 @@ package avx512
 #include <math.h>
 #include <stdlib.h>
 #include <x86intrin.h>
-#include <immintrin.h>
 
-int32_t avx_dot_vnni(const size_t n, int8_t *x, int8_t *y)
+int32_t avx2_dot_int8(const size_t n, int8_t *x, int8_t *y)
+{
+    static const size_t single_size = 32;
+    const size_t end = n / single_size;
+    const int16_t op4[16] = {[0 ... 15] = 1};
+    __m256i *vx = (__m256i *)x;
+    __m256i *vy = (__m256i *)y;
+    volatile __m256i vsum = {0};
+    for(size_t i=0; i<end; ++i) {
+      __m256i vresult1 = _mm256_maddubs_epi16(vx[i], vy[i]);
+      __m256i vresult2 = _mm256_madd_epi16(vresult1, *(__m256i *)&op4);
+      vsum = _mm256_add_epi32(vsum, vresult2);
+    }
+    int32_t *t = (int32_t *)&vsum;
+    volatile int32_t sum = 0;
+    for (int i=0; i<8; i++) {
+      sum += t[i];
+    }
+    return sum;
+}
+
+int32_t avx512_dot_vnni(const size_t n, int8_t *x, int8_t *y)
 {
     static const size_t single_size = 64;
     const size_t end = n / single_size;
@@ -28,7 +48,7 @@ int32_t avx_dot_vnni(const size_t n, int8_t *x, int8_t *y)
 
 }
 
-int32_t avx_dot_int8(const size_t n, int8_t *x, int8_t *y)
+int32_t avx512_dot_int8(const size_t n, int8_t *x, int8_t *y)
 {
     static const size_t single_size = 64;
     const size_t end = n / single_size;
@@ -47,7 +67,6 @@ int32_t avx_dot_int8(const size_t n, int8_t *x, int8_t *y)
       sum += t[i];
     }
     return sum;
-
 }
 */
 import "C"
@@ -79,15 +98,21 @@ func MmFree_int8(v []int8) {
 	C._mm_free(unsafe.Pointer(&v[0]))
 }
 
-func Dot_vnni(size int, x, y []int8) int32 {
+func Dot_avx512_vnni(size int, x, y []int8) int32 {
 	size = align(size)
-	dot := C.avx_dot_vnni((C.size_t)(size), (*C.int8_t)(&x[0]), (*C.int8_t)(&y[0]))
+	dot := C.avx512_dot_vnni((C.size_t)(size), (*C.int8_t)(&x[0]), (*C.int8_t)(&y[0]))
 	return int32(dot)
 }
 
-func Dot_int8(size int, x, y []int8) int32 {
+func Dot_avx512_int8(size int, x, y []int8) int32 {
 	size = align(size)
-	dot := C.avx_dot_int8((C.size_t)(size), (*C.int8_t)(&x[0]), (*C.int8_t)(&y[0]))
+	dot := C.avx512_dot_int8((C.size_t)(size), (*C.int8_t)(&x[0]), (*C.int8_t)(&y[0]))
+	return int32(dot)
+}
+
+func Dot_avx2_int8(size int, x, y []int8) int32 {
+	size = align(size)
+	dot := C.avx2_dot_int8((C.size_t)(size), (*C.int8_t)(&x[0]), (*C.int8_t)(&y[0]))
 	return int32(dot)
 }
 
