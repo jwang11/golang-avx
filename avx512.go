@@ -66,18 +66,21 @@ int32_t avx_dot_vnni(const size_t n, int8_t *x, int8_t *y)
     const size_t end = n / single_size;
     __m512i *vx = (__m512i *)x;
     __m512i *vy = (__m512i *)y;
-    __m512i vsum = {0};
+    volatile __m512i vsum = {0};
     for(size_t i=0; i<end; ++i) {
       vsum = _mm512_dpbusds_epi32(vsum, vx[i], vy[i]);
     }
     int32_t *t = (int32_t *)&vsum;
-    int32_t sum = 0;
-    for (int i=0; i<16; i++)
+    volatile int32_t sum = 0;
+    for (int i=0; i<16; i++) {
+      printf("%d ", t[i]);
       sum += t[i];
+    }
     return sum;
-}
 
+}
 */
+
 import "C"
 import (
 	"math"

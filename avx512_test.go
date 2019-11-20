@@ -84,7 +84,7 @@ func TestDot(t *testing.T) {
 }
 
 func TestDot_vnni(t *testing.T) {
-	for _, size := range []int{63, 64, 128, 256} {
+	for _, size := range []int{63, 64, 127, 128, 256} {
 		func(size int) {
 			x := MmMalloc_int8(size)
 			y := MmMalloc_int8(size)
@@ -93,8 +93,8 @@ func TestDot_vnni(t *testing.T) {
 
 			var truth int32
 			for i := 0; i < size; i++ {
-				x[i] = int8(i)
-				y[i] = int8(i + 1)
+				x[i] = int8(i % 127)
+				y[i] = int8((i + 1) % 127)
 				truth += int32(x[i]) * int32(y[i])
 			}
 
