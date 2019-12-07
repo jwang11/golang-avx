@@ -1,5 +1,4 @@
 package avx512
-
 /*
 #cgo CFLAGS: -mavx512f -mavx512vl -mavx512bw -mavx512vnni
 #cgo LDFLAGS: -lm
@@ -15,15 +14,16 @@ int32_t avx2_dot_int8(const size_t n, int8_t *x, int8_t *y)
     const int16_t op4[16] = {[0 ... 15] = 1};
     __m256i *vx = (__m256i *)x;
     __m256i *vy = (__m256i *)y;
-    volatile __m256i vsum = {0};
-    for(size_t i=0; i<end; ++i) {
+    __m256i vsum = {0};
+    int32_t *t = (int32_t *)&vsum;
+    for(size_t i = 0; i < end; ++i) {
       __m256i vresult1 = _mm256_maddubs_epi16(vx[i], vy[i]);
       __m256i vresult2 = _mm256_madd_epi16(vresult1, *(__m256i *)&op4);
-      vsum = _mm256_add_epi32(vsum, vresult2);
+	  // trick here is to stop compiler over-optimize
+      *(__m256i *)t = _mm256_add_epi32(vsum, vresult2);
     }
-    int32_t *t = (int32_t *)&vsum;
-    volatile int32_t sum = 0;
-    for (int i=0; i<8; i++) {
+    int32_t sum = 0;
+    for (int i = 0; i < 8; i++) {
       sum += t[i];
     }
     return sum;
@@ -35,13 +35,14 @@ int32_t avx512_dot_vnni(const size_t n, int8_t *x, int8_t *y)
     const size_t end = n / single_size;
     __m512i *vx = (__m512i *)x;
     __m512i *vy = (__m512i *)y;
-    volatile __m512i vsum = {0};
-    for(size_t i=0; i<end; ++i) {
-      vsum = _mm512_dpbusds_epi32(vsum, vx[i], vy[i]);
-    }
+    __m512i vsum = {0};
     int32_t *t = (int32_t *)&vsum;
-    volatile int32_t sum = 0;
-    for (int i=0; i<16; i++) {
+    for(size_t i = 0; i < end; ++i) {
+	  // trick here is to stop compiler over-optimize
+      *(__m512i *)t = _mm512_dpbusds_epi32(vsum, vx[i], vy[i]);
+    }
+    int32_t sum = 0;
+    for (int i = 0; i < 16; i++) {
       sum += t[i];
     }
     return sum;
@@ -55,15 +56,16 @@ int32_t avx512_dot_int8(const size_t n, int8_t *x, int8_t *y)
     const int16_t op4[32] = {[0 ... 31] = 1};
     __m512i *vx = (__m512i *)x;
     __m512i *vy = (__m512i *)y;
-    volatile __m512i vsum = {0};
+    __m512i vsum = {0};
+    int32_t *t = (int32_t *)&vsum;
     for(size_t i=0; i<end; ++i) {
       __m512i vresult1 = _mm512_maddubs_epi16(vx[i], vy[i]);
       __m512i vresult2 = _mm512_madd_epi16(vresult1, *(__m512i *)&op4);
-      vsum = _mm512_add_epi32(vsum, vresult2);
+	  // trick here is to stop compiler over-optimize
+      *(__m512i *)t = _mm512_add_epi32(vsum, vresult2);
     }
-    int32_t *t = (int32_t *)&vsum;
-    volatile int32_t sum = 0;
-    for (int i=0; i<16; i++) {
+    int32_t sum = 0;
+    for (int i = 0; i < 16; i++) {
       sum += t[i];
     }
     return sum;
@@ -76,7 +78,7 @@ import (
 	"unsafe"
 )
 
-func MmMalloc_int8(size int) []int8 {
+func Malloc_int8(size int) []int8 {
 	size_ := size
 	size = align(size)
 	ptr := C._mm_malloc((C.size_t)(C.sizeof_int8_t*size), 64)
@@ -94,9 +96,22 @@ func MmMalloc_int8(size int) []int8 {
 	return goSlice
 }
 
-func MmFree_int8(v []int8) {
+func Free_int8(v []int8) {
 	C._mm_free(unsafe.Pointer(&v[0]))
 }
+
+func Make_int8(size int) []int8 {
+	size_ := size
+	size = align(size)
+	goSlice := make([]int8, size)
+	if size_ != size {
+		for i := size_; i < size; i++ {
+			goSlice[i] = 0
+		}
+	}
+	return goSlice
+}
+
 
 func Dot_avx512_vnni(size int, x, y []int8) int32 {
 	size = align(size)
@@ -117,5 +132,5 @@ func Dot_avx2_int8(size int, x, y []int8) int32 {
 }
 
 func align(size int) int {
-	return int(math.Ceil(float64(size)/8.0) * 8.0)
+	return int(math.Ceil(float64(size)/64.0) * 64.0)
 }
